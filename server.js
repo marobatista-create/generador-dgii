@@ -15,10 +15,10 @@ app.use(express.json());
 // ── CONFIGURACIÓN DE CONEXIÓN A MYSQL ────────────────────────
 // Cambia estos valores por los tuyos
 const DB_CONFIG = {
-  host: "localhost",
-  port: 3306,
+  host: "shinkansen.proxy.rlwy.net",
+  port: 58964,
   user: "root",
-  password: "Ghost#1965@Fbs",   // <-- cambia esto
+  password: "tAMFVMuDrJdNaTjMPwzbywOjjWDTLojz",
   database: "dgii",
 };
 
