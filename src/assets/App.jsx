@@ -1,8 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const API = "https://generador-dgii-production.up.railway.app";
 
-// ─── CATÁLOGOS ───────────────────────────────────────────────────────────────
 const TIPOS_BIENES_606 = [
   { v: "01", l: "01 - Gastos de personal" }, { v: "02", l: "02 - Trabajo, suministros y servicios" },
   { v: "03", l: "03 - Arrendamientos" }, { v: "04", l: "04 - Activos fijos" },
@@ -25,12 +24,12 @@ const FORMAS_PAGO_606 = [
   { v: "05", l: "05 - Permuta" }, { v: "06", l: "06 - Nota de crédito" }, { v: "07", l: "07 - Mixto" },
 ];
 const TIPO_RET_ISR = [
-  { v: "", l: "— Ninguna —" }, { v: "01", l: "01 - Alquileres" },
-  { v: "02", l: "02 - Honorarios" }, { v: "03", l: "03 - Otras rentas" },
-  { v: "04", l: "04 - Rentas presuntas" }, { v: "05", l: "05 - Intereses PN" },
-  { v: "06", l: "06 - Intereses PJ" }, { v: "07", l: "07 - Juegos de azar" },
-  { v: "08", l: "08 - Alquileres PN" }, { v: "09", l: "09 - Facturas gubernamentales" },
-  { v: "10", l: "10 - Compras" }, { v: "11", l: "11 - Compras exterior" }, { v: "12", l: "12 - Pagos exterior" },
+  { v: "", l: "— Ninguna —" }, { v: "01", l: "01 - Alquileres" }, { v: "02", l: "02 - Honorarios" },
+  { v: "03", l: "03 - Otras rentas" }, { v: "04", l: "04 - Rentas presuntas" },
+  { v: "05", l: "05 - Intereses PN" }, { v: "06", l: "06 - Intereses PJ" },
+  { v: "07", l: "07 - Juegos de azar" }, { v: "08", l: "08 - Alquileres PN" },
+  { v: "09", l: "09 - Facturas gubernamentales" }, { v: "10", l: "10 - Compras" },
+  { v: "11", l: "11 - Compras exterior" }, { v: "12", l: "12 - Pagos exterior" },
 ];
 
 const CSV_HEADERS_606 = ["rnc","tipoId","ncf","ncfMod","tipoBienes","fechaNcf","fechaPago","montoFact","itbisFact","itbisRetTerceros","itbisPercibido","tipoRetIsr","retRenta","isrPercibido","impSelConsumo","otrosImp","propina","formaPago"];
@@ -51,6 +50,7 @@ const emptyRow607 = () => ({
 
 const fmt = (v) => { const n = parseFloat(v) || 0; return n.toFixed(2); };
 const fmtDate = (d) => d ? d.replace(/-/g, "") : "";
+const fmtMoney = (v) => parseFloat(v || 0).toLocaleString("es-DO", { minimumFractionDigits: 2 });
 
 function build606(header, rows) {
   const periodo = header.periodo.replace("-", "");
@@ -97,9 +97,38 @@ function buildCSVTemplate(type) {
 function downloadFile(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+// Mapear fila BD → formato app
+function mapBD606(r) {
+  return {
+    id: r.id, _bdId: r.id,
+    rnc: r.rnc_cedula||"", tipoId: r.tipo_id||"1", ncf: r.ncf||"",
+    ncfMod: r.ncf_modificado||"", tipoBienes: r.tipo_bienes_servicios||"01",
+    fechaNcf: r.fecha_comprobante||"", fechaPago: r.fecha_pago||"",
+    montoFact: r.monto_facturado, itbisFact: r.itbis_facturado,
+    itbisRetTerceros: r.itbis_retenido_terceros, itbisPercibido: r.itbis_percibido,
+    tipoRetIsr: r.tipo_retencion_isr||"", retRenta: r.retencion_renta,
+    isrPercibido: r.isr_percibido, impSelConsumo: r.impuesto_selectivo,
+    otrosImp: r.otros_impuestos, propina: r.propina_legal, formaPago: r.forma_pago,
+  };
+}
+function mapBD607(r) {
+  return {
+    id: r.id, _bdId: r.id,
+    rnc: r.rnc_cedula||"", tipoId: r.tipo_id||"1", ncf: r.ncf||"",
+    ncfMod: r.ncf_modificado||"", tipoIngreso: r.tipo_ingreso||"01",
+    fechaNcf: r.fecha_comprobante||"", fechaRetPago: r.fecha_retencion_pago||"",
+    montoFact: r.monto_facturado, itbisFact: r.itbis_facturado,
+    itbisRetenido: r.itbis_retenido, itbisPercibido: r.itbis_percibido,
+    retRenta: r.retencion_renta, isrPercibido: r.isr_percibido,
+    impSelConsumo: r.impuesto_selectivo, otrosImp: r.otros_impuestos,
+    propina: r.propina_legal, efectivo: r.efectivo, cheque: r.cheque_transferencia,
+    tarjeta: r.tarjeta_debito_credito, credito: r.credito,
+    bonos: r.bonos_certificados, permuta: r.permuta, otras: r.otras_formas,
+  };
 }
 
 // ─── UI ATOMS ────────────────────────────────────────────────────────────────
@@ -116,20 +145,19 @@ function Sel({ value, onChange, options }) {
   return <select style={inp} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select>;
 }
 
-// ─── FILA 606 ─────────────────────────────────────────────────────────────────
-function Row606({ row, onChange, onDelete, onSave, idx, saving }) {
+// ─── FORMULARIO 606 ───────────────────────────────────────────
+function Form606({ row, onChange, onSave, saving }) {
   const ch = k => v => onChange({...row,[k]:v});
   return (
     <div style={{background:"#080f1c",border:"1px solid #1e2d40",borderRadius:10,padding:14,marginBottom:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <span style={{color:"#f59e0b",fontSize:11}}>COMPRA #{idx+1} {row.ncf && <span style={{color:"#475569"}}>· {row.ncf}</span>}</span>
-        <div style={{display:"flex",gap:6}}>
-          <button onClick={onSave} disabled={saving}
-            style={{background:saving?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:6,padding:"3px 12px",cursor:saving?"not-allowed":"pointer",fontSize:11,opacity:saving?0.6:1}}>
-            {saving?"⏳":"💾"} {saving?"Guardando...":"Guardar"}
-          </button>
-          <button onClick={onDelete} style={{background:"#450a0a",border:"1px solid #7f1d1d",color:"#f87171",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontSize:11}}>✕</button>
-        </div>
+        <span style={{color:"#f59e0b",fontSize:12,fontWeight:700}}>
+          {row._bdId ? "✏️ EDITANDO COMPRA #"+row._bdId : "➕ NUEVA COMPRA"}
+        </span>
+        <button onClick={onSave} disabled={saving}
+          style={{background:saving?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:6,padding:"4px 16px",cursor:saving?"not-allowed":"pointer",fontSize:11,opacity:saving?0.6:1}}>
+          {saving?"⏳ Guardando...":row._bdId?"💾 Actualizar":"💾 Guardar"}
+        </button>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:8}}>
         <Field label="RNC/CÉDULA"><Inp value={row.rnc} onChange={ch("rnc")} placeholder="101234567" /></Field>
@@ -155,20 +183,19 @@ function Row606({ row, onChange, onDelete, onSave, idx, saving }) {
   );
 }
 
-// ─── FILA 607 ─────────────────────────────────────────────────────────────────
-function Row607({ row, onChange, onDelete, onSave, idx, saving }) {
+// ─── FORMULARIO 607 ───────────────────────────────────────────
+function Form607({ row, onChange, onSave, saving }) {
   const ch = k => v => onChange({...row,[k]:v});
   return (
     <div style={{background:"#080f1c",border:"1px solid #1e2d40",borderRadius:10,padding:14,marginBottom:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <span style={{color:"#10b981",fontSize:11}}>VENTA #{idx+1} {row.ncf && <span style={{color:"#475569"}}>· {row.ncf}</span>}</span>
-        <div style={{display:"flex",gap:6}}>
-          <button onClick={onSave} disabled={saving}
-            style={{background:saving?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:6,padding:"3px 12px",cursor:saving?"not-allowed":"pointer",fontSize:11,opacity:saving?0.6:1}}>
-            {saving?"⏳":"💾"} {saving?"Guardando...":"Guardar"}
-          </button>
-          <button onClick={onDelete} style={{background:"#450a0a",border:"1px solid #7f1d1d",color:"#f87171",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontSize:11}}>✕</button>
-        </div>
+        <span style={{color:"#10b981",fontSize:12,fontWeight:700}}>
+          {row._bdId ? "✏️ EDITANDO VENTA #"+row._bdId : "➕ NUEVA VENTA"}
+        </span>
+        <button onClick={onSave} disabled={saving}
+          style={{background:saving?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:6,padding:"4px 16px",cursor:saving?"not-allowed":"pointer",fontSize:11,opacity:saving?0.6:1}}>
+          {saving?"⏳ Guardando...":row._bdId?"💾 Actualizar":"💾 Guardar"}
+        </button>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:8}}>
         <Field label="RNC/CÉDULA"><Inp value={row.rnc} onChange={ch("rnc")} placeholder="40212345678" /></Field>
@@ -200,6 +227,50 @@ function Row607({ row, onChange, onDelete, onSave, idx, saving }) {
           <Field label="OTRAS"><Inp value={row.otras} onChange={ch("otras")} placeholder="0.00" /></Field>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── TABLA DE REGISTROS ───────────────────────────────────────
+function TablaRegistros({ registros, tipo, onEditar, onAnular, cargando }) {
+  if (cargando) return <div style={{color:"#475569",fontSize:12,padding:"20px 0",textAlign:"center"}}>⏳ Cargando registros...</div>;
+  if (!registros.length) return <div style={{color:"#334155",fontSize:12,padding:"20px 0",textAlign:"center"}}>No hay registros guardados para este período.</div>;
+
+  return (
+    <div style={{overflowX:"auto",marginTop:8}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"monospace"}}>
+        <thead>
+          <tr style={{borderBottom:"1px solid #1e2d40"}}>
+            {["#","NCF","RNC","Monto","ITBIS","Fecha","Acciones"].map(h=>(
+              <th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#475569",fontWeight:700,letterSpacing:1,fontSize:10}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {registros.map((r,i)=>(
+            <tr key={r.id} style={{borderBottom:"1px solid #0f2040",background:i%2===0?"#080f1c":"transparent"}}>
+              <td style={{padding:"8px 10px",color:"#334155"}}>{r.id}</td>
+              <td style={{padding:"8px 10px",color:"#0ea5e9"}}>{r.ncf}</td>
+              <td style={{padding:"8px 10px",color:"#e2e8f0"}}>{r.rnc_cedula||"—"}</td>
+              <td style={{padding:"8px 10px",color:"#10b981"}}>RD$ {fmtMoney(r.monto_facturado)}</td>
+              <td style={{padding:"8px 10px",color:"#f59e0b"}}>RD$ {fmtMoney(r.itbis_facturado)}</td>
+              <td style={{padding:"8px 10px",color:"#64748b"}}>{r.fecha_comprobante||"—"}</td>
+              <td style={{padding:"8px 10px"}}>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>onEditar(r)}
+                    style={{background:"#1e3a5f",border:"none",color:"#0ea5e9",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:11}}>
+                    ✏️ Editar
+                  </button>
+                  <button onClick={()=>onAnular(r.id)}
+                    style={{background:"#450a0a",border:"none",color:"#f87171",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:11}}>
+                    🗑 Anular
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -251,7 +322,7 @@ function CSVPanel({ type, onImport, onClose, showToast }) {
     <div style={{position:"fixed",inset:0,background:"#000000dd",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#0a0f1e",border:"1px solid #1e3a5f",borderRadius:14,width:"100%",maxWidth:700,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",padding:"14px 20px",borderBottom:"1px solid #1e2d40",gap:12}}>
-          <span style={{color:"#10b981",fontSize:13,flex:1,fontFamily:"monospace"}}>📂 Importar CSV — {type==="606"?"Compras":"Ventas"}</span>
+          <span style={{color:"#10b981",fontSize:13,flex:1,fontFamily:"monospace"}}>📂 Importar CSV</span>
           <button onClick={onClose} style={{background:"#1e293b",border:"none",color:"#94a3b8",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:12}}>✕</button>
         </div>
         <div style={{padding:20,display:"flex",flexDirection:"column",gap:14}}>
@@ -285,125 +356,121 @@ function CSVPanel({ type, onImport, onClose, showToast }) {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("606");
+  const [subTab, setSubTab] = useState("nuevo"); // "nuevo" | "registros"
   const [header, setHeader] = useState({ rnc:"", periodo:new Date().toISOString().slice(0,7) });
-  const [rows606, setRows606] = useState([emptyRow606()]);
-  const [rows607, setRows607] = useState([emptyRow607()]);
-  const [savingId, setSavingId] = useState(null);
+  const [form606, setForm606] = useState(emptyRow606());
+  const [form607, setForm607] = useState(emptyRow607());
+  const [registros, setRegistros] = useState([]);
+  const [cargandoRegistros, setCargandoRegistros] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(null);
   const [showCSV, setShowCSV] = useState(false);
   const [toast, setToast] = useState({ msg:"", tipo:"ok" });
   const [bdStatus, setBdStatus] = useState("verificando");
-  const [totalGuardados, setTotalGuardados] = useState({ "606": 0, "607": 0 });
 
-  // Verificar conexión al servidor
-  useState(() => {
+  useEffect(() => {
     fetch(`${API}/api/status`)
       .then(r => r.json())
       .then(() => setBdStatus("conectado"))
       .catch(() => setBdStatus("desconectado"));
   }, []);
 
-  const showToast = (msg, tipo="ok") => {
-    setToast({msg,tipo});
-    setTimeout(()=>setToast({msg:"",tipo:"ok"}), 3000);
-  };
+  const showToast = (msg, tipo="ok") => { setToast({msg,tipo}); setTimeout(()=>setToast({msg:"",tipo:"ok"}),3000); };
 
-  // Guardar UNA factura individual y limpiar su fila
-  const handleSaveRow = async (rowId) => {
-    if (!header.rnc) { showToast("⚠ Ingresa el RNC de tu empresa primero","warn"); return; }
-    if (!header.periodo) { showToast("⚠ Selecciona el período fiscal","warn"); return; }
-
-    const rows = tab==="606" ? rows606 : rows607;
-    const row = rows.find(r => r.id === rowId);
-    if (!row) return;
-    if (!row.ncf) { showToast("⚠ El NCF es obligatorio","warn"); return; }
-    if (!row.montoFact) { showToast("⚠ El monto facturado es obligatorio","warn"); return; }
-
-    setSavingId(rowId);
+  const cargarRegistros = async () => {
+    setCargandoRegistros(true);
     try {
       const periodo = header.periodo.replace("-","");
       const endpoint = tab==="606" ? "compras" : "ventas";
-      const res = await fetch(`${API}/api/${endpoint}`, {
-        method: "POST",
+      const res = await fetch(`${API}/api/${endpoint}?periodo=${periodo}`);
+      const data = await res.json();
+      setRegistros(data);
+    } catch { showToast("❌ No se pudo conectar con el servidor","error"); }
+    setCargandoRegistros(false);
+  };
+
+  const handleSubTab = (st) => {
+    setSubTab(st);
+    if (st === "registros") cargarRegistros();
+  };
+
+  const handleSave = async () => {
+    if (!header.rnc) { showToast("⚠ Ingresa el RNC de tu empresa","warn"); return; }
+    const form = tab==="606" ? form606 : form607;
+    if (!form.ncf) { showToast("⚠ El NCF es obligatorio","warn"); return; }
+    if (!form.montoFact) { showToast("⚠ El monto es obligatorio","warn"); return; }
+
+    setSaving(true);
+    try {
+      const periodo = header.periodo.replace("-","");
+      const endpoint = tab==="606" ? "compras" : "ventas";
+      const isEdit = !!form._bdId;
+      const url = isEdit ? `${API}/api/${endpoint}/${form._bdId}` : `${API}/api/${endpoint}`;
+      const method = isEdit ? "PUT" : "POST";
+      const body = isEdit ? { ...form, periodoFiscal: periodo } : [{ ...form, periodoFiscal: periodo }];
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ ...row, periodoFiscal: periodo }]),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.ok) {
-        // Limpiar la fila guardada y agregar una nueva vacía
-        const emptyFn = tab==="606" ? emptyRow606 : emptyRow607;
-        if (tab==="606") {
-          setRows606(prev => prev.map(r => r.id===rowId ? emptyRow606() : r));
-        } else {
-          setRows607(prev => prev.map(r => r.id===rowId ? emptyRow607() : r));
-        }
-        setTotalGuardados(prev => ({ ...prev, [tab]: prev[tab] + 1 }));
-        showToast(`✅ Factura guardada en MySQL · ${totalGuardados[tab]+1} guardada(s) este período`,"ok");
+        showToast(isEdit ? "✅ Factura actualizada correctamente" : "✅ Factura guardada en MySQL");
+        if (tab==="606") setForm606(emptyRow606());
+        else setForm607(emptyRow607());
+        if (subTab === "registros") cargarRegistros();
       } else {
         showToast(`❌ Error: ${data.error}`,"error");
       }
-    } catch {
-      showToast("❌ No se pudo conectar. ¿Está corriendo node server.js?","error");
-    }
-    setSavingId(null);
+    } catch { showToast("❌ No se pudo conectar con el servidor","error"); }
+    setSaving(false);
+  };
+
+  const handleEditar = (r) => {
+    const mapped = tab==="606" ? mapBD606(r) : mapBD607(r);
+    if (tab==="606") setForm606(mapped);
+    else setForm607(mapped);
+    setSubTab("nuevo");
+    showToast("✏️ Factura cargada para editar","ok");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleAnular = async (id) => {
+    if (!window.confirm("¿Estás seguro de que deseas anular esta factura? Esta acción no se puede deshacer.")) return;
+    try {
+      const endpoint = tab==="606" ? "compras" : "ventas";
+      const res = await fetch(`${API}/api/${endpoint}/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.ok) {
+        showToast("✅ Factura anulada correctamente");
+        cargarRegistros();
+      } else {
+        showToast(`❌ Error: ${data.error}`,"error");
+      }
+    } catch { showToast("❌ No se pudo conectar con el servidor","error"); }
   };
 
   const handleGenerate = async () => {
     if (!header.rnc) { showToast("⚠ Ingresa el RNC","warn"); return; }
     const periodo = header.periodo.replace("-","");
     try {
-      // Traer facturas guardadas en BD para ese período
       const endpoint = tab==="606" ? "compras" : "ventas";
       const res = await fetch(`${API}/api/${endpoint}?periodo=${periodo}`);
       const data = await res.json();
-      if (!data.length) { showToast("⚠ No hay facturas guardadas en MySQL para este período","warn"); return; }
-      // Mapear campos BD → formato app
-      const rows = tab==="606"
-        ? data.map(r=>({ ...emptyRow606(),
-            rnc: r.rnc_cedula||"", tipoId: r.tipo_id||"1", ncf: r.ncf||"",
-            ncfMod: r.ncf_modificado||"", tipoBienes: r.tipo_bienes_servicios||"01",
-            fechaNcf: r.fecha_comprobante||"", fechaPago: r.fecha_pago||"",
-            montoFact: r.monto_facturado, itbisFact: r.itbis_facturado,
-            itbisRetTerceros: r.itbis_retenido_terceros, itbisPercibido: r.itbis_percibido,
-            tipoRetIsr: r.tipo_retencion_isr||"", retRenta: r.retencion_renta,
-            isrPercibido: r.isr_percibido, impSelConsumo: r.impuesto_selectivo,
-            otrosImp: r.otros_impuestos, propina: r.propina_legal, formaPago: r.forma_pago,
-          }))
-        : data.map(r=>({ ...emptyRow607(),
-            rnc: r.rnc_cedula||"", tipoId: r.tipo_id||"1", ncf: r.ncf||"",
-            ncfMod: r.ncf_modificado||"", tipoIngreso: r.tipo_ingreso||"01",
-            fechaNcf: r.fecha_comprobante||"", fechaRetPago: r.fecha_retencion_pago||"",
-            montoFact: r.monto_facturado, itbisFact: r.itbis_facturado,
-            itbisRetenido: r.itbis_retenido, itbisPercibido: r.itbis_percibido,
-            retRenta: r.retencion_renta, isrPercibido: r.isr_percibido,
-            impSelConsumo: r.impuesto_selectivo, otrosImp: r.otros_impuestos,
-            propina: r.propina_legal, efectivo: r.efectivo,
-            cheque: r.cheque_transferencia, tarjeta: r.tarjeta_debito_credito,
-            credito: r.credito, bonos: r.bonos_certificados,
-            permuta: r.permuta, otras: r.otras_formas,
-          }));
+      if (!data.length) { showToast("⚠ No hay facturas guardadas para este período","warn"); return; }
+      const rows = tab==="606" ? data.map(mapBD606) : data.map(mapBD607);
       const content = tab==="606" ? build606(header,rows) : build607(header,rows);
       setPreview({ content, filename:`${tab}_${header.rnc}_${periodo}.txt` });
-    } catch {
-      showToast("❌ No se pudo conectar con el servidor","error");
-    }
+    } catch { showToast("❌ No se pudo conectar con el servidor","error"); }
   };
-
-  const handleDownload = () => {
-    if (!preview) return;
-    downloadFile(preview.content, preview.filename, "text/plain;charset=utf-8");
-    showToast("✓ Archivo .txt descargado");
-  };
-
-  const rows = tab==="606" ? rows606 : rows607;
-  const setRows = tab==="606" ? setRows606 : setRows607;
 
   const bdColor = bdStatus==="conectado" ? "#10b981" : bdStatus==="desconectado" ? "#ef4444" : "#f59e0b";
   const bdLabel = bdStatus==="conectado" ? "● MySQL conectado" : bdStatus==="desconectado" ? "● MySQL desconectado" : "● Verificando...";
 
   const TABS = [
     { id:"606", label:"📥 COMPRAS (606)", color:"#f59e0b" },
-    { id:"607", label:"📤 VENTAS (607)",  color:"#10b981" },
+    { id:"607", label:"📤 VENTAS (607)", color:"#10b981" },
   ];
 
   return (
@@ -413,8 +480,6 @@ export default function App() {
         *{box-sizing:border-box}
         input:focus,select:focus,textarea:focus{border-color:#0ea5e9!important;box-shadow:0 0 0 2px #0ea5e920}
         ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0a0f1e}::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:3px}
-        .row-enter{animation:fadeIn .18s ease}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
       {/* HEADER */}
@@ -422,8 +487,8 @@ export default function App() {
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#0369a1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🇩🇴</div>
           <div>
-            <div style={{color:"#f1f5f9",fontWeight:700,fontSize:14,letterSpacing:1}}>GENERADOR DGII v3</div>
-            <div style={{color:"#334155",fontSize:10}}>606 · 607 · MySQL · CSV</div>
+            <div style={{color:"#f1f5f9",fontWeight:700,fontSize:14,letterSpacing:1}}>GENERADOR DGII v4</div>
+            <div style={{color:"#334155",fontSize:10}}>606 · 607 · MySQL · Edición · CSV</div>
           </div>
         </div>
         <div style={{background:"#080f1c",border:`1px solid ${bdColor}33`,borderRadius:8,padding:"6px 14px"}}>
@@ -439,10 +504,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* TABS */}
+      {/* TABS PRINCIPALES */}
       <div style={{display:"flex",borderBottom:"1px solid #0f2040",background:"#060d1a",padding:"0 24px"}}>
         {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{
+          <button key={t.id} onClick={()=>{ setTab(t.id); setSubTab("nuevo"); }} style={{
             padding:"11px 22px",background:"none",border:"none",cursor:"pointer",fontSize:12,
             fontFamily:"inherit",fontWeight:700,letterSpacing:1,
             color:tab===t.id?t.color:"#334155",
@@ -450,79 +515,86 @@ export default function App() {
             transition:"all .15s",
           }}>{t.label}</button>
         ))}
-        {/* Contador de guardados */}
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:16,paddingRight:8}}>
-          <span style={{color:"#334155",fontSize:11}}>
-            Guardadas este período: <span style={{color:"#10b981",fontWeight:700}}>{totalGuardados[tab]}</span>
-          </span>
-        </div>
       </div>
 
       <div style={{maxWidth:1100,margin:"0 auto",padding:"20px"}}>
 
-        {/* FILAS */}
-        <div>
-          {tab==="606"
-            ? rows606.map((r,i)=>(
-              <div key={r.id} className="row-enter">
-                <Row606 row={r} idx={i} saving={savingId===r.id}
-                  onChange={nr=>setRows606(p=>p.map(x=>x.id===r.id?nr:x))}
-                  onDelete={()=>setRows606(p=>p.length>1?p.filter(x=>x.id!==r.id):[emptyRow606()])}
-                  onSave={()=>handleSaveRow(r.id)}
-                />
-              </div>
-            ))
-            : rows607.map((r,i)=>(
-              <div key={r.id} className="row-enter">
-                <Row607 row={r} idx={i} saving={savingId===r.id}
-                  onChange={nr=>setRows607(p=>p.map(x=>x.id===r.id?nr:x))}
-                  onDelete={()=>setRows607(p=>p.length>1?p.filter(x=>x.id!==r.id):[emptyRow607()])}
-                  onSave={()=>handleSaveRow(r.id)}
-                />
-              </div>
-            ))}
-        </div>
-
-        {/* ACCIONES */}
-        <div style={{display:"flex",gap:10,marginTop:12,flexWrap:"wrap",alignItems:"center"}}>
-                   
-          <button onClick={()=>setShowCSV(true)}
-            style={{background:"#0f2040",border:"1px solid #1e3a5f",color:"#10b981",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
-            📂 Importar CSV
-          </button>
-          <button onClick={()=>downloadFile(buildCSVTemplate(tab),`plantilla_${tab}.csv`,"text/csv")}
-            style={{background:"#0f2040",border:"1px solid #1e3a5f",color:"#94a3b8",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
-            ⬇ Plantilla CSV
-          </button>
+        {/* SUB-TABS */}
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          <button onClick={()=>setSubTab("nuevo")} style={{
+            padding:"8px 20px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700,
+            background:subTab==="nuevo"?"#1e3a5f":"#080f1c",
+            color:subTab==="nuevo"?"#e2e8f0":"#475569",
+          }}>➕ Nueva factura</button>
+          <button onClick={()=>handleSubTab("registros")} style={{
+            padding:"8px 20px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700,
+            background:subTab==="registros"?"#1e3a5f":"#080f1c",
+            color:subTab==="registros"?"#e2e8f0":"#475569",
+          }}>📋 Ver registros guardados</button>
           <button onClick={handleGenerate}
-            style={{background:"linear-gradient(135deg,#0ea5e9,#0369a1)",border:"none",color:"#fff",borderRadius:8,padding:"10px 24px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",letterSpacing:1,marginLeft:"auto"}}>
+            style={{background:"linear-gradient(135deg,#0ea5e9,#0369a1)",border:"none",color:"#fff",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",marginLeft:"auto"}}>
             ⚡ Generar .TXT para DGII
           </button>
         </div>
 
-        {/* GUÍA */}
-        <div style={{marginTop:24,background:"#060d1a",border:"1px solid #0f2040",borderRadius:12,padding:16}}>
-          <div style={{color:"#334155",fontSize:10,letterSpacing:2,marginBottom:10}}>FLUJO DE TRABAJO</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
-            {[
-              ["1️⃣ Llenar","Completa los campos de la factura."],
-              ["2️⃣ Guardar","Clic en 💾 Guardar — se guarda en MySQL y los campos se limpian."],
-              ["3️⃣ Repetir","Ingresa la siguiente factura en los campos limpios."],
-              ["4️⃣ Generar TXT","Al cerrar el período, clic en ⚡ Generar .TXT — toma los datos de MySQL."],
-            ].map(([t,d])=>(
-              <div key={t} style={{padding:"10px 12px",background:"#080f1c",borderRadius:8,borderLeft:"3px solid #1e3a5f"}}>
-                <div style={{color:"#94a3b8",fontSize:11,marginBottom:3}}>{t}</div>
-                <div style={{color:"#475569",fontSize:10,lineHeight:1.6}}>{d}</div>
-              </div>
-            ))}
+        {/* NUEVA FACTURA */}
+        {subTab==="nuevo" && (
+          <>
+            {tab==="606"
+              ? <Form606 row={form606} onChange={setForm606} onSave={handleSave} saving={saving} />
+              : <Form607 row={form607} onChange={setForm607} onSave={handleSave} saving={saving} />
+            }
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              <button onClick={()=>setShowCSV(true)}
+                style={{background:"#0f2040",border:"1px solid #1e3a5f",color:"#10b981",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
+                📂 Importar CSV
+              </button>
+              <button onClick={()=>downloadFile(buildCSVTemplate(tab),`plantilla_${tab}.csv`,"text/csv")}
+                style={{background:"#0f2040",border:"1px solid #1e3a5f",color:"#94a3b8",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
+                ⬇ Plantilla CSV
+              </button>
+              {(form606._bdId || form607._bdId) && (
+                <button onClick={()=>{ if(tab==="606") setForm606(emptyRow606()); else setForm607(emptyRow607()); }}
+                  style={{background:"#0f2040",border:"1px solid #334155",color:"#94a3b8",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
+                  ✕ Cancelar edición
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* REGISTROS GUARDADOS */}
+        {subTab==="registros" && (
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <span style={{color:"#475569",fontSize:11}}>
+                Período: <span style={{color:"#e2e8f0"}}>{header.periodo}</span> · {registros.length} registro(s)
+              </span>
+              <button onClick={cargarRegistros}
+                style={{background:"#0f2040",border:"1px solid #1e3a5f",color:"#0ea5e9",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:11,fontFamily:"monospace"}}>
+                🔄 Recargar
+              </button>
+            </div>
+            <TablaRegistros
+              registros={registros}
+              tipo={tab}
+              onEditar={handleEditar}
+              onAnular={handleAnular}
+              cargando={cargandoRegistros}
+            />
           </div>
-        </div>
+        )}
       </div>
 
-      {preview && <PreviewModal content={preview.content} filename={preview.filename} onClose={()=>setPreview(null)} onDownload={handleDownload} />}
+      {preview && (
+        <PreviewModal content={preview.content} filename={preview.filename}
+          onClose={()=>setPreview(null)}
+          onDownload={()=>{ downloadFile(preview.content,preview.filename,"text/plain;charset=utf-8"); showToast("✓ Archivo descargado"); }}
+        />
+      )}
       {showCSV && (
         <CSVPanel type={tab} showToast={showToast}
-          onImport={newRows=>setRows(prev=>[...prev.filter(r=>r.rnc||r.ncf),...newRows])}
+          onImport={rows=>{ if(tab==="606") setForm606(rows[0]); else setForm607(rows[0]); showToast(`✓ ${rows.length} fila(s) cargada(s)`); }}
           onClose={()=>setShowCSV(false)}
         />
       )}
