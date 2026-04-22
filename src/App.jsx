@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-const API = "http://localhost:3001";
+const API = "https://generador-dgii-production.up.railway.app";
 
 // ─── CATÁLOGOS ───────────────────────────────────────────────────────────────
 const TIPOS_BIENES_606 = [
