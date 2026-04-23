@@ -238,6 +238,8 @@ function UsuariosModal({ onClose, showToast }) {
       if (data.ok) {
         showToast(editando ? "✅ Usuario actualizado" : "✅ Usuario creado");
         setForm({ nombre:"", email:"", password:"", rol:"contador" });
+setEditando(null);
+        setForm({ nombre:"", email:"", password:"", rol:"contador" });
         setEditando(null);
         cargar();
       } else { showToast(`❌ ${data.error}`,"error"); }
@@ -335,6 +337,8 @@ function EmpresasModal({ onClose, showToast, onRefresh }) {
       const data = await res.json();
       if (data.ok) {
         showToast(editando ? "✅ Empresa actualizada" : "✅ Empresa creada");
+        setForm({ rnc:"", razon_social:"", nombre_comercial:"", tipo_contribuyente:"J", regimen_impositivo:"Ordinario" });
+setEditando(null);
         setForm({ rnc:"", razon_social:"", nombre_comercial:"", tipo_contribuyente:"J", regimen_impositivo:"Ordinario" });
         setEditando(null);
         cargar(); onRefresh();
