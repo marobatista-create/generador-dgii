@@ -5,7 +5,7 @@
 import express from "express";
 import cors from "cors";
 import mysql from "mysql2/promise";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const app = express();
@@ -377,6 +377,125 @@ app.delete("/api/ventas/:id", authMiddleware, async (req, res) => {
   try {
     await pool.query("UPDATE venta SET estado = 'V' WHERE id = ?", [req.params.id]);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── REPORTES ──────────────────────────────────────────────────
+
+// GET /api/reportes/resumen-mensual?empresa_id=1&periodo=202501
+app.get("/api/reportes/resumen-mensual", authMiddleware, async (req, res) => {
+  const { empresa_id, periodo } = req.query;
+  try {
+    const [compras] = await pool.query(`
+      SELECT
+        COUNT(*) AS total_facturas,
+        SUM(monto_facturado) AS total_monto,
+        SUM(itbis_facturado) AS total_itbis,
+        SUM(itbis_retenido_terceros) AS total_itbis_retenido,
+        SUM(retencion_renta) AS total_ret_renta,
+        SUM(isr_percibido) AS total_isr,
+        SUM(propina_legal) AS total_propina,
+        SUM(impuesto_selectivo) AS total_isc
+      FROM compra
+      WHERE empresa_id = ? AND periodo_fiscal = ? AND estado = 'A'
+    `, [empresa_id, periodo]);
+
+    const [ventas] = await pool.query(`
+      SELECT
+        COUNT(*) AS total_facturas,
+        SUM(monto_facturado) AS total_monto,
+        SUM(itbis_facturado) AS total_itbis,
+        SUM(itbis_retenido) AS total_itbis_retenido,
+        SUM(retencion_renta) AS total_ret_renta,
+        SUM(isr_percibido) AS total_isr,
+        SUM(propina_legal) AS total_propina,
+        SUM(efectivo) AS total_efectivo,
+        SUM(cheque_transferencia) AS total_cheque,
+        SUM(tarjeta_debito_credito) AS total_tarjeta,
+        SUM(credito) AS total_credito
+      FROM venta
+      WHERE empresa_id = ? AND periodo_fiscal = ? AND estado = 'A'
+    `, [empresa_id, periodo]);
+
+    res.json({ compras: compras[0], ventas: ventas[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/reportes/por-tipo-bien?empresa_id=1&periodo=202501
+app.get("/api/reportes/por-tipo-bien", authMiddleware, async (req, res) => {
+  const { empresa_id, periodo } = req.query;
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        tipo_bienes_servicios AS tipo,
+        COUNT(*) AS cantidad,
+        SUM(monto_facturado) AS total_monto,
+        SUM(itbis_facturado) AS total_itbis,
+        SUM(retencion_renta) AS total_ret_renta
+      FROM compra
+      WHERE empresa_id = ? AND periodo_fiscal = ? AND estado = 'A'
+      GROUP BY tipo_bienes_servicios
+      ORDER BY total_monto DESC
+    `, [empresa_id, periodo]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/reportes/comparativo?empresa_id=1&periodos=202501,202502,202503
+app.get("/api/reportes/comparativo", authMiddleware, async (req, res) => {
+  const { empresa_id, periodos } = req.query;
+  const lista = periodos ? periodos.split(",") : [];
+  if (!lista.length) return res.json([]);
+  try {
+    const placeholders = lista.map(() => "?").join(",");
+    const [compras] = await pool.query(`
+      SELECT periodo_fiscal,
+        COUNT(*) AS facturas,
+        SUM(monto_facturado) AS monto,
+        SUM(itbis_facturado) AS itbis,
+        SUM(retencion_renta) AS ret_renta
+      FROM compra
+      WHERE empresa_id = ? AND periodo_fiscal IN (${placeholders}) AND estado = 'A'
+      GROUP BY periodo_fiscal ORDER BY periodo_fiscal
+    `, [empresa_id, ...lista]);
+
+    const [ventas] = await pool.query(`
+      SELECT periodo_fiscal,
+        COUNT(*) AS facturas,
+        SUM(monto_facturado) AS monto,
+        SUM(itbis_facturado) AS itbis
+      FROM venta
+      WHERE empresa_id = ? AND periodo_fiscal IN (${placeholders}) AND estado = 'A'
+      GROUP BY periodo_fiscal ORDER BY periodo_fiscal
+    `, [empresa_id, ...lista]);
+
+    res.json({ compras, ventas });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/reportes/itbis-retenido?empresa_id=1&periodo=202501
+app.get("/api/reportes/itbis-retenido", authMiddleware, async (req, res) => {
+  const { empresa_id, periodo } = req.query;
+  try {
+    const [compras] = await pool.query(`
+      SELECT
+        SUM(itbis_retenido_terceros) AS itbis_ret_compras,
+        SUM(itbis_percibido) AS itbis_percibido_compras,
+        SUM(retencion_renta) AS ret_renta_compras,
+        SUM(isr_percibido) AS isr_percibido_compras
+      FROM compra WHERE empresa_id = ? AND periodo_fiscal = ? AND estado = 'A'
+    `, [empresa_id, periodo]);
+
+    const [ventas] = await pool.query(`
+      SELECT
+        SUM(itbis_retenido) AS itbis_ret_ventas,
+        SUM(itbis_percibido) AS itbis_percibido_ventas,
+        SUM(retencion_renta) AS ret_renta_ventas,
+        SUM(isr_percibido) AS isr_percibido_ventas
+      FROM venta WHERE empresa_id = ? AND periodo_fiscal = ? AND estado = 'A'
+    `, [empresa_id, periodo]);
+
+    res.json({ compras: compras[0], ventas: ventas[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
