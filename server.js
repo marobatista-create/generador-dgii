@@ -10,7 +10,12 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+}));
+app.options("*", cors());
 app.use(express.json({ limit: "10mb" }));
 
 const DB_CONFIG = {
