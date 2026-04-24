@@ -121,129 +121,139 @@ function downloadFile(content, filename, mime) {
 
 // ── EXPORTAR EXCEL PROFESIONAL ────────────────────────────────
 async function exportarExcelProfesional({ empresa, compras = [], ventas = [], periodo }) {
-  // Cargar SheetJS dinámicamente
-  if (!window.XLSX) {
+  // Cargar ExcelJS dinámicamente
+  if (!window.ExcelJS) {
     await new Promise((res, rej) => {
       const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
       s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     });
   }
-  const XLSX = window.XLSX;
+  const ExcelJS = window.ExcelJS;
 
   const meses = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio",
                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const p = periodo.replace("-","");
   const año = p.slice(0,4);
   const mesNom = meses[parseInt(p.slice(4,6))] || "";
-
   const num = v => parseFloat(v)||0;
-  const wb = XLSX.utils.book_new();
 
-  // ── Estilos base ──────────────────────────────────────────
-  const sHdrNavy  = { font:{bold:true,color:{rgb:"FFFFFF"},sz:10,name:"Arial"}, fill:{fgColor:{rgb:"1E3A5F"}}, alignment:{horizontal:"center",vertical:"center",wrapText:true}, border:{top:{style:"thin",color:{rgb:"CBD5E1"}},bottom:{style:"thin",color:{rgb:"CBD5E1"}},left:{style:"thin",color:{rgb:"CBD5E1"}},right:{style:"thin",color:{rgb:"CBD5E1"}}} };
-  const sHdrGreen = { ...sHdrNavy, fill:{fgColor:{rgb:"10B981"}} };
-  const sHdrAmber = { ...sHdrNavy, fill:{fgColor:{rgb:"F59E0B"}} };
-  const sHdrTeal  = { ...sHdrNavy, fill:{fgColor:{rgb:"0F766E"}} };
-  const sTotal    = { font:{bold:true,color:{rgb:"1E3A5F"},sz:10,name:"Arial"}, fill:{fgColor:{rgb:"E0F2FE"}}, alignment:{horizontal:"right"}, border:sHdrNavy.border };
-  const sTotalLbl = { ...sTotal, alignment:{horizontal:"center"} };
-  const sMoney    = { numFmt:"#,##0.00", alignment:{horizontal:"right"}, border:sHdrNavy.border, font:{sz:10,name:"Arial"} };
-  const sMoneyEven= { ...sMoney, fill:{fgColor:{rgb:"F8FAFC"}} };
-  const sText     = { alignment:{horizontal:"center"}, border:sHdrNavy.border, font:{sz:10,name:"Arial"} };
-  const sTextEven = { ...sText, fill:{fgColor:{rgb:"F8FAFC"}} };
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Sistema DGII v3";
+  wb.created = new Date();
 
-  const applyStyles = (ws, range, styleFn) => {
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const addr = XLSX.utils.encode_cell({r:R,c:C});
-        if (!ws[addr]) ws[addr] = {t:"z",v:""};
-        ws[addr].s = styleFn(R, C);
-      }
-    }
+  // ── COLORES ──────────────────────────────────────────────────
+  const C = {
+    NAVY:"1E3A5F", BLUE:"0EA5E9", GREEN:"10B981", AMBER:"F59E0B",
+    RED:"EF4444", WHITE:"FFFFFF", LIGHT:"E0F2FE", GRAY:"F8FAFC",
+    BORDER:"CBD5E1", TEXT:"1E293B", MUTED:"64748B", TEAL:"0F766E",
   };
 
-  // ── Función para crear hoja de datos ─────────────────────
-  const crearHojaDatos = (filas, cols, moneyCols, titulo, subtitulo, hdrStyle, totalStyle) => {
-    const aoa = [];
-    // Título (fila 0)
-    aoa.push([titulo]);
-    // Subtítulo (fila 1)
-    aoa.push([subtitulo]);
-    // Vacío (fila 2)
-    aoa.push([]);
-    // Headers (fila 3)
-    aoa.push(cols.map(c => c.label));
+  const fBold  = (color=C.TEXT, sz=10) => ({ name:"Arial", bold:true, color:{argb:"FF"+color}, size:sz });
+  const fNorm  = (color=C.TEXT, sz=10) => ({ name:"Arial", color:{argb:"FF"+color}, size:sz });
+  const fillSolid = color => ({ type:"pattern", pattern:"solid", fgColor:{argb:"FF"+color} });
+  const borderAll = () => {
+    const s = { style:"thin", color:{argb:"FF"+C.BORDER} };
+    return { top:s, bottom:s, left:s, right:s };
+  };
+  const alignC = (wrapText=false) => ({ horizontal:"center", vertical:"middle", wrapText });
+  const alignR = () => ({ horizontal:"right", vertical:"middle" });
+  const alignL = () => ({ horizontal:"left", vertical:"middle" });
+  const moneyFmt = "#,##0.00";
+
+  // ── FUNCIÓN CREAR HOJA ───────────────────────────────────────
+  const crearHoja = (nombre, filas, cols, moneyCols, titulo, subtitulo, hdrColor) => {
+    const ws = wb.addWorksheet(nombre, { views:[{state:"frozen",ySplit:4}] });
+
+    // Anchos
+    ws.columns = cols.map(c => ({ width: c.width || 14 }));
+
+    // Fila 1: Título
+    ws.addRow([titulo]);
+    ws.mergeCells(1, 1, 1, cols.length);
+    const tRow = ws.getRow(1);
+    tRow.height = 30;
+    const tCell = ws.getCell(1,1);
+    tCell.fill = fillSolid(hdrColor);
+    tCell.font = fBold(C.WHITE, 13);
+    tCell.alignment = alignC();
+
+    // Fila 2: Subtítulo
+    ws.addRow([subtitulo]);
+    ws.mergeCells(2, 1, 2, cols.length);
+    const sRow = ws.getRow(2);
+    sRow.height = 18;
+    const sCell = ws.getCell(2,1);
+    sCell.fill = fillSolid(C.NAVY);
+    sCell.font = fNorm(C.WHITE, 10);
+    sCell.alignment = alignC();
+
+    // Fila 3: vacía
+    ws.addRow([]);
+    ws.getRow(3).height = 6;
+
+    // Fila 4: Headers
+    ws.addRow(cols.map(c => c.label));
+    const hRow = ws.getRow(4);
+    hRow.height = 26;
+    hRow.eachCell((cell, colNum) => {
+      // Formas de cobro en 607 usan TEAL
+      const isCobro = nombre.includes("607") && colNum >= cols.findIndex(c=>c.key==="efectivo")+1;
+      cell.fill = fillSolid(isCobro ? C.TEAL : hdrColor);
+      cell.font = fBold(C.WHITE, 9);
+      cell.alignment = alignC(true);
+      cell.border = borderAll();
+    });
+
     // Datos
-    filas.forEach(r => aoa.push(cols.map(c => r[c.key] ?? "")));
-    // Totales
-    const totRow = ["TOTALES", ...cols.slice(1).map(c =>
-      moneyCols.includes(c.key) ? filas.reduce((s,r)=>s+num(r[c.key]),0) : ""
-    )];
-    aoa.push(totRow);
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-    // Merge título y subtítulo
-    const ncols = cols.length;
-    ws["!merges"] = [
-      {s:{r:0,c:0},e:{r:0,c:ncols-1}},
-      {s:{r:1,c:0},e:{r:1,c:ncols-1}},
-    ];
-
-    // Anchos de columna
-    ws["!cols"] = cols.map(c => ({wch: c.width || 14}));
-
-    // Estilos fila título
-    for (let C = 0; C < ncols; C++) {
-      const addr = XLSX.utils.encode_cell({r:0,c:C});
-      if (!ws[addr]) ws[addr] = {t:"z",v:""};
-      ws[addr].s = { font:{bold:true,color:{rgb:"FFFFFF"},sz:13,name:"Arial"}, fill:hdrStyle.fill, alignment:{horizontal:"center",vertical:"center"} };
-    }
-    // Estilos subtítulo
-    for (let C = 0; C < ncols; C++) {
-      const addr = XLSX.utils.encode_cell({r:1,c:C});
-      if (!ws[addr]) ws[addr] = {t:"z",v:""};
-      ws[addr].s = { font:{color:{rgb:"FFFFFF"},sz:10,name:"Arial"}, fill:{fgColor:{rgb:"1E3A5F"}}, alignment:{horizontal:"center"} };
-    }
-    // Estilos headers
-    for (let C = 0; C < ncols; C++) {
-      const addr = XLSX.utils.encode_cell({r:3,c:C});
-      if (ws[addr]) ws[addr].s = hdrStyle;
-    }
-    // Estilos datos
     filas.forEach((r, ri) => {
       const isEven = ri % 2 === 0;
-      cols.forEach((c, ci) => {
-        const addr = XLSX.utils.encode_cell({r:4+ri, c:ci});
-        if (!ws[addr]) ws[addr] = {t:"z",v:""};
-        if (moneyCols.includes(c.key)) {
-          ws[addr].s = isEven ? sMoneyEven : sMoney;
-          ws[addr].t = "n";
+      const rowData = cols.map(c => {
+        const v = r[c.key] ?? "";
+        return moneyCols.includes(c.key) ? (num(v)) : v;
+      });
+      ws.addRow(rowData);
+      const dataRow = ws.getRow(5 + ri);
+      dataRow.height = 18;
+      dataRow.eachCell((cell, colNum) => {
+        const colKey = cols[colNum-1]?.key;
+        cell.fill = fillSolid(isEven ? C.GRAY : C.WHITE);
+        cell.border = borderAll();
+        if (moneyCols.includes(colKey)) {
+          cell.numFmt = moneyFmt;
+          cell.alignment = alignR();
+          cell.font = fNorm(C.TEXT, 10);
         } else {
-          ws[addr].s = isEven ? sTextEven : sText;
+          cell.alignment = alignC();
+          cell.font = fNorm(C.TEXT, 10);
         }
       });
     });
-    // Estilos totales
-    const totRowIdx = 4 + filas.length;
-    cols.forEach((c, ci) => {
-      const addr = XLSX.utils.encode_cell({r:totRowIdx, c:ci});
-      if (!ws[addr]) ws[addr] = {t:"z",v:""};
-      ws[addr].s = ci === 0 ? sTotalLbl : (moneyCols.includes(c.key) ? {...sTotal, numFmt:"#,##0.00"} : sTotal);
-      if (moneyCols.includes(c.key) && ws[addr].v) ws[addr].t = "n";
+
+    // Fila de totales
+    const totRow = ws.addRow(cols.map((c, i) => {
+      if (i === 0) return "TOTALES";
+      return moneyCols.includes(c.key) ? filas.reduce((s,r)=>s+num(r[c.key]),0) : "";
+    }));
+    totRow.height = 22;
+    totRow.eachCell((cell, colNum) => {
+      const colKey = cols[colNum-1]?.key;
+      cell.fill = fillSolid(C.LIGHT);
+      cell.border = borderAll();
+      cell.font = fBold(C.NAVY, 10);
+      if (colNum === 1) {
+        cell.alignment = alignC();
+      } else if (moneyCols.includes(colKey)) {
+        cell.numFmt = moneyFmt;
+        cell.alignment = alignR();
+      }
     });
 
-    // Altura de filas
-    ws["!rows"] = [
-      {hpt:30}, {hpt:18}, {hpt:6}, {hpt:26},
-      ...filas.map(()=>({hpt:18})),
-      {hpt:22}
-    ];
     return ws;
   };
 
-  // ── HOJA 606 ───────────────────────────────────────────────
+  // ── HOJA 606 ─────────────────────────────────────────────────
   const cols606 = [
     {key:"rnc_cedula",label:"RNC / CÉDULA",width:16},
     {key:"tipo_id",label:"TIPO ID",width:9},
@@ -265,16 +275,12 @@ async function exportarExcelProfesional({ empresa, compras = [], ventas = [], pe
     {key:"forma_pago",label:"FORMA PAGO",width:12},
   ];
   const money606 = ["monto_facturado","itbis_facturado","itbis_retenido_terceros","itbis_percibido","retencion_renta","isr_percibido","impuesto_selectivo","otros_impuestos","propina_legal"];
-
-  const ws606 = crearHojaDatos(
-    compras, cols606, money606,
+  crearHoja("606 - Compras", compras, cols606, money606,
     `FORMULARIO 606 — COMPRAS · ${empresa.razon_social} · ${mesNom} ${año}`,
     `RNC: ${empresa.rnc}  |  Período: ${p}  |  ${compras.length} registro(s)`,
-    sHdrAmber, sTotal
-  );
-  XLSX.utils.book_append_sheet(wb, ws606, "606 - Compras");
+    C.AMBER);
 
-  // ── HOJA 607 ───────────────────────────────────────────────
+  // ── HOJA 607 ─────────────────────────────────────────────────
   const cols607 = [
     {key:"rnc_cedula",label:"RNC / CÉDULA",width:16},
     {key:"tipo_id",label:"TIPO ID",width:9},
@@ -301,79 +307,111 @@ async function exportarExcelProfesional({ empresa, compras = [], ventas = [], pe
     {key:"otras_formas",label:"OTRAS",width:13},
   ];
   const money607 = ["monto_facturado","itbis_facturado","itbis_retenido","itbis_percibido","retencion_renta","isr_percibido","impuesto_selectivo","otros_impuestos","propina_legal","efectivo","cheque_transferencia","tarjeta_debito_credito","credito","bonos_certificados","permuta","otras_formas"];
-
-  const ws607 = crearHojaDatos(
-    ventas, cols607, money607,
+  crearHoja("607 - Ventas", ventas, cols607, money607,
     `FORMULARIO 607 — VENTAS · ${empresa.razon_social} · ${mesNom} ${año}`,
     `RNC: ${empresa.rnc}  |  Período: ${p}  |  ${ventas.length} registro(s)`,
-    sHdrGreen, sTotal
-  );
-  XLSX.utils.book_append_sheet(wb, ws607, "607 - Ventas");
+    C.GREEN);
 
-  // ── HOJA RESUMEN ──────────────────────────────────────────
-  const resumen = [
-    [`RESUMEN FISCAL — ${mesNom.toUpperCase()} ${año}`],
-    [],
-    ["CONCEPTO", "COMPRAS (606)", "VENTAS (607)"],
-    ["── MONTOS FACTURADOS ──", "", ""],
-    ["Total Facturado (RD$)", compras.reduce((s,r)=>s+num(r.monto_facturado),0), ventas.reduce((s,r)=>s+num(r.monto_facturado),0)],
-    ["ITBIS Facturado (RD$)", compras.reduce((s,r)=>s+num(r.itbis_facturado),0), ventas.reduce((s,r)=>s+num(r.itbis_facturado),0)],
-    ["Cantidad de Facturas", compras.length, ventas.length],
-    [],
-    ["── RETENCIONES ──", "", ""],
-    ["ITBIS Retenido Terceros (RD$)", compras.reduce((s,r)=>s+num(r.itbis_retenido_terceros),0), ventas.reduce((s,r)=>s+num(r.itbis_retenido),0)],
-    ["ITBIS Percibido (RD$)", compras.reduce((s,r)=>s+num(r.itbis_percibido),0), ventas.reduce((s,r)=>s+num(r.itbis_percibido),0)],
-    ["Retención de Renta ISR (RD$)", compras.reduce((s,r)=>s+num(r.retencion_renta),0), ventas.reduce((s,r)=>s+num(r.retencion_renta),0)],
-    ["ISR Percibido (RD$)", compras.reduce((s,r)=>s+num(r.isr_percibido),0), ventas.reduce((s,r)=>s+num(r.isr_percibido),0)],
-    [],
-    ["── OTROS IMPUESTOS ──", "", ""],
-    ["Impuesto Selectivo al Consumo (RD$)", compras.reduce((s,r)=>s+num(r.impuesto_selectivo),0), ventas.reduce((s,r)=>s+num(r.impuesto_selectivo),0)],
-    ["Otros Impuestos (RD$)", compras.reduce((s,r)=>s+num(r.otros_impuestos),0), ventas.reduce((s,r)=>s+num(r.otros_impuestos),0)],
-    ["Propina Legal (RD$)", compras.reduce((s,r)=>s+num(r.propina_legal),0), ventas.reduce((s,r)=>s+num(r.propina_legal),0)],
-    [],
-    ["── FORMAS DE COBRO (607) ──", "", ""],
-    ["Efectivo (RD$)", "", ventas.reduce((s,r)=>s+num(r.efectivo),0)],
-    ["Cheque / Transferencia (RD$)", "", ventas.reduce((s,r)=>s+num(r.cheque_transferencia),0)],
-    ["Tarjeta Débito/Crédito (RD$)", "", ventas.reduce((s,r)=>s+num(r.tarjeta_debito_credito),0)],
-    ["Crédito (RD$)", "", ventas.reduce((s,r)=>s+num(r.credito),0)],
-    ["Bonos / Certificados (RD$)", "", ventas.reduce((s,r)=>s+num(r.bonos_certificados),0)],
-    ["Permuta (RD$)", "", ventas.reduce((s,r)=>s+num(r.permuta),0)],
-    ["Otras Formas (RD$)", "", ventas.reduce((s,r)=>s+num(r.otras_formas),0)],
-    [],
-    [`Generado el ${new Date().toLocaleDateString("es-DO")} · Sistema DGII v3 · generador-dgii.vercel.app`],
-  ];
+  // ── HOJA RESUMEN ─────────────────────────────────────────────
+  const wsR = wb.addWorksheet("Resumen");
+  wsR.columns = [{width:38},{width:22},{width:22}];
 
-  const wsR = XLSX.utils.aoa_to_sheet(resumen);
-  wsR["!cols"] = [{wch:38},{wch:22},{wch:22}];
-  wsR["!merges"] = [{s:{r:0,c:0},e:{r:0,c:2}}];
-
-  // Estilos resumen
-  const colorSecciones = {3:"1E3A5F", 8:"1E3A5F", 14:"1E3A5F", 19:"1E3A5F"};
-  resumen.forEach((row, ri) => {
-    row.forEach((_, ci) => {
-      const addr = XLSX.utils.encode_cell({r:ri,c:ci});
-      if (!wsR[addr]) wsR[addr] = {t:"z",v:""};
-      if (ri === 0) {
-        wsR[addr].s = {font:{bold:true,color:{rgb:"FFFFFF"},sz:15,name:"Arial"},fill:{fgColor:{rgb:"1E3A5F"}},alignment:{horizontal:"center"}};
-      } else if (ri === 2) {
-        wsR[addr].s = sHdrNavy;
-      } else if (colorSecciones[ri] !== undefined) {
-        wsR[addr].s = {font:{bold:true,color:{rgb:"FFFFFF"},sz:10,name:"Arial"},fill:{fgColor:{rgb:colorSecciones[ri]}},alignment:{horizontal:"center"}};
-      } else if (typeof row[0]==="string" && row[0].includes("(RD$)") && ci > 0 && row[ci] !== "") {
-        wsR[addr].s = {numFmt:"#,##0.00",alignment:{horizontal:"right"},font:{sz:10,name:"Arial"},fill:{fgColor:{rgb:"F8FAFC"}},border:sHdrNavy.border};
-        wsR[addr].t = "n";
-      } else if (row[0] !== "" && typeof row[0]==="string" && row.length > 1) {
-        wsR[addr].s = {font:{sz:10,name:"Arial"},fill:{fgColor:{rgb:"F8FAFC"}},alignment:{horizontal:ci===0?"left":"center"},border:sHdrNavy.border};
+  const addResumenRow = (ws, label, valC, valV, opts={}) => {
+    const row = ws.addRow([label, valC !== "" ? valC : "", valV !== "" ? valV : ""]);
+    row.height = opts.height || 20;
+    row.eachCell((cell, ci) => {
+      if (opts.isTitulo) {
+        cell.fill = fillSolid(opts.color || C.NAVY);
+        cell.font = fBold(C.WHITE, opts.sz || 11);
+        cell.alignment = alignC();
+        if (ci===1) ws.mergeCells(row.number,1,row.number,3);
+      } else if (opts.isHeader) {
+        cell.fill = fillSolid(C.NAVY);
+        cell.font = fBold(C.WHITE, 10);
+        cell.alignment = alignC();
+        cell.border = borderAll();
+      } else if (opts.isSeccion) {
+        cell.fill = fillSolid(opts.color || C.NAVY);
+        cell.font = fBold(C.WHITE, 10);
+        cell.alignment = alignC();
+        ws.mergeCells(row.number,1,row.number,3);
+      } else {
+        cell.fill = fillSolid(C.GRAY);
+        cell.border = borderAll();
+        if (ci === 1) { cell.font = fNorm(C.MUTED,10); cell.alignment = alignL(); }
+        else {
+          cell.font = fBold(opts.color || C.TEXT, 11);
+          cell.alignment = alignR();
+          if (typeof valC === "number" || typeof valV === "number") cell.numFmt = moneyFmt;
+        }
       }
     });
+    return row;
+  };
+
+  // Título principal
+  const tR = wsR.addRow([`RESUMEN FISCAL — ${mesNom.toUpperCase()} ${año}`]);
+  tR.height = 35;
+  wsR.mergeCells(1,1,1,3);
+  const tCell = wsR.getCell(1,1);
+  tCell.fill = fillSolid(C.NAVY);
+  tCell.font = fBold(C.WHITE, 16);
+  tCell.alignment = alignC();
+
+  wsR.addRow([]);
+
+  // Headers columnas
+  addResumenRow(wsR,"CONCEPTO","COMPRAS (606)","VENTAS (607)",{isHeader:true,height:22});
+
+  // Sección montos
+  addResumenRow(wsR,"── MONTOS FACTURADOS ──","","",{isSeccion:true,color:C.BLUE,height:22});
+  addResumenRow(wsR,"Total Facturado (RD$)", compras.reduce((s,r)=>s+num(r.monto_facturado),0), ventas.reduce((s,r)=>s+num(r.monto_facturado),0), {color:C.TEXT});
+  addResumenRow(wsR,"ITBIS Facturado (RD$)", compras.reduce((s,r)=>s+num(r.itbis_facturado),0), ventas.reduce((s,r)=>s+num(r.itbis_facturado),0), {color:C.BLUE});
+  addResumenRow(wsR,"Cantidad de Facturas", compras.length, ventas.length, {color:C.NAVY});
+
+  // Sección retenciones
+  wsR.addRow([]).height = 6;
+  addResumenRow(wsR,"── RETENCIONES ──","","",{isSeccion:true,color:C.AMBER,height:22});
+  addResumenRow(wsR,"ITBIS Retenido Terceros (RD$)", compras.reduce((s,r)=>s+num(r.itbis_retenido_terceros),0), ventas.reduce((s,r)=>s+num(r.itbis_retenido),0), {color:C.AMBER});
+  addResumenRow(wsR,"ITBIS Percibido (RD$)", compras.reduce((s,r)=>s+num(r.itbis_percibido),0), ventas.reduce((s,r)=>s+num(r.itbis_percibido),0), {color:C.AMBER});
+  addResumenRow(wsR,"Retención de Renta ISR (RD$)", compras.reduce((s,r)=>s+num(r.retencion_renta),0), ventas.reduce((s,r)=>s+num(r.retencion_renta),0), {color:C.RED});
+  addResumenRow(wsR,"ISR Percibido (RD$)", compras.reduce((s,r)=>s+num(r.isr_percibido),0), ventas.reduce((s,r)=>s+num(r.isr_percibido),0), {color:C.RED});
+
+  // Sección otros
+  wsR.addRow([]).height = 6;
+  addResumenRow(wsR,"── OTROS IMPUESTOS ──","","",{isSeccion:true,color:C.GREEN,height:22});
+  addResumenRow(wsR,"Impuesto Selectivo al Consumo (RD$)", compras.reduce((s,r)=>s+num(r.impuesto_selectivo),0), ventas.reduce((s,r)=>s+num(r.impuesto_selectivo),0), {color:C.GREEN});
+  addResumenRow(wsR,"Otros Impuestos (RD$)", compras.reduce((s,r)=>s+num(r.otros_impuestos),0), ventas.reduce((s,r)=>s+num(r.otros_impuestos),0), {color:C.GREEN});
+  addResumenRow(wsR,"Propina Legal (RD$)", compras.reduce((s,r)=>s+num(r.propina_legal),0), ventas.reduce((s,r)=>s+num(r.propina_legal),0), {color:C.GREEN});
+
+  // Formas de cobro
+  wsR.addRow([]).height = 6;
+  addResumenRow(wsR,"── FORMAS DE COBRO (607) ──","","",{isSeccion:true,color:C.TEAL,height:22});
+  [["Efectivo","efectivo"],["Cheque / Transferencia","cheque_transferencia"],
+   ["Tarjeta Débito/Crédito","tarjeta_debito_credito"],["Crédito","credito"],
+   ["Bonos / Certificados","bonos_certificados"],["Permuta","permuta"],
+   ["Otras Formas","otras_formas"]
+  ].forEach(([label,key]) => {
+    addResumenRow(wsR, label+"  (RD$)", "", ventas.reduce((s,r)=>s+num(r[key]),0), {color:C.TEAL});
   });
 
-  XLSX.utils.book_append_sheet(wb, wsR, "Resumen");
+  // Footer
+  wsR.addRow([]).height = 10;
+  const fRow = wsR.addRow([`Generado el ${new Date().toLocaleDateString("es-DO")} · Sistema DGII v3 · generador-dgii.vercel.app`]);
+  wsR.mergeCells(fRow.number,1,fRow.number,3);
+  fRow.getCell(1).font = { name:"Arial", italic:true, color:{argb:"FF"+C.MUTED}, size:9 };
+  fRow.getCell(1).alignment = alignC();
 
-  // Descargar
+  // ── DESCARGAR ─────────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
   const nombre = empresa.razon_social.replace(/\s+/g,"_").slice(0,20);
-  XLSX.writeFile(wb, `DGII_${nombre}_${p}.xlsx`);
+  a.href = url; a.download = `DGII_${nombre}_${p}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
 }
+
 
 // ─── UI ATOMS ─────────────────────────────────────────────────
 const inp = { background:"#0d1524", border:"1px solid #1e3a5f", borderRadius:6, color:"#e2e8f0", padding:"6px 10px", fontSize:12, width:"100%", fontFamily:"'JetBrains Mono','Courier New',monospace", outline:"none" };
