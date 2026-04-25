@@ -49,7 +49,7 @@ const TIPO_RET_ISR = [
 ];
 
 // NCF válidos: B01-B16, E31, E32, E33, E34, E41, E43, E44, E45, E46, E47
-const NCF_REGEX = /^[BE]\d{2}\d{8,10}$/;
+const NCF_REGEX = /^[BE]\d{2}\d{8}$/;
 const validarNCF = (ncf) => {
   if (!ncf) return null;
   if (!NCF_REGEX.test(ncf)) return "NCF inválido (ej: E310000000001 o B010000000001)";
@@ -1302,6 +1302,18 @@ export default function App() {
 
   const showToast = (msg, tipo="ok") => { setToast({msg,tipo}); setTimeout(()=>setToast({msg:"",tipo:"ok"}),3500); };
 
+
+  const cambiarEmpresa = (empresa) => {
+    setEmpresaActual(empresa);
+    setForm606(emptyRow606());
+    setForm607(emptyRow607());
+    setRegistros([]);
+    setRegTotal(0);
+    setRegPage(1);
+    setRegBuscar("");
+    setSubTab("nuevo");
+  };
+
   useEffect(() => { if (usuario) cargarEmpresas(); }, [usuario]);
 
   const cargarEmpresas = async () => {
@@ -1438,7 +1450,7 @@ export default function App() {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flex:1,flexWrap:"wrap"}}>
           <span style={{color:"#475569",fontSize:10}}>EMPRESA:</span>
-          <EmpresaSelector empresas={empresas} empresaActual={empresaActual} onChange={setEmpresaActual} />
+          <EmpresaSelector empresas={empresas} empresaActual={empresaActual} onChange={cambiarEmpresa} />
           {mainTab==="facturas" && <input type="month" style={{...inp,width:150}} value={periodo} onChange={e=>setPeriodo(e.target.value)} />}
         </div>
         <div style={{position:"relative"}}>
