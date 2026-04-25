@@ -319,49 +319,46 @@ async function exportarExcelProfesional({ empresa, compras = [], ventas = [], pe
   const addResumenRow = (ws, label, valC, valV, opts={}) => {
     const row = ws.addRow([label, valC !== "" ? valC : "", valV !== "" ? valV : ""]);
     row.height = opts.height || 20;
-    if (opts.isSeccion || opts.isTitulo) {
-      // Merge BEFORE styling to avoid conflict
-      ws.mergeCells(row.number, 1, row.number, 3);
-      const cell = ws.getCell(row.number, 1);
-      cell.fill = fillSolid(opts.color || C.NAVY);
-      cell.font = fBold(C.WHITE, opts.sz || (opts.isTitulo ? 13 : 10));
-      cell.alignment = alignC();
-    } else if (opts.isHeader) {
-      [1,2,3].forEach(ci => {
-        const cell = ws.getCell(row.number, ci);
+    row.eachCell((cell, ci) => {
+      if (opts.isTitulo) {
+        cell.fill = fillSolid(opts.color || C.NAVY);
+        cell.font = fBold(C.WHITE, opts.sz || 11);
+        cell.alignment = alignC();
+        if (ci===1) ws.mergeCells(row.number,1,row.number,3);
+      } else if (opts.isHeader) {
         cell.fill = fillSolid(C.NAVY);
         cell.font = fBold(C.WHITE, 10);
         cell.alignment = alignC();
         cell.border = borderAll();
-      });
-    } else {
-      [1,2,3].forEach(ci => {
-        const cell = ws.getCell(row.number, ci);
+      } else if (opts.isSeccion) {
+        cell.fill = fillSolid(opts.color || C.NAVY);
+        cell.font = fBold(C.WHITE, 10);
+        cell.alignment = alignC();
+        ws.mergeCells(row.number,1,row.number,3);
+      } else {
         cell.fill = fillSolid(C.GRAY);
         cell.border = borderAll();
-        if (ci === 1) {
-          cell.font = fNorm(C.MUTED, 10);
-          cell.alignment = alignL();
-        } else {
+        if (ci === 1) { cell.font = fNorm(C.MUTED,10); cell.alignment = alignL(); }
+        else {
           cell.font = fBold(opts.color || C.TEXT, 11);
           cell.alignment = alignR();
           if (typeof valC === "number" || typeof valV === "number") cell.numFmt = moneyFmt;
         }
-      });
-    }
+      }
+    });
     return row;
   };
 
   // Título principal
-  const tR = wsR.addRow([`RESUMEN FISCAL — ${mesNom.toUpperCase()} ${año}`, "", ""]);
+  const tR = wsR.addRow([`RESUMEN FISCAL — ${mesNom.toUpperCase()} ${año}`]);
   tR.height = 35;
-  wsR.mergeCells(tR.number, 1, tR.number, 3);
-  const tCell = wsR.getCell(tR.number, 1);
+  wsR.mergeCells(1,1,1,3);
+  const tCell = wsR.getCell(1,1);
   tCell.fill = fillSolid(C.NAVY);
   tCell.font = fBold(C.WHITE, 16);
   tCell.alignment = alignC();
 
-  wsR.addRow([]).height = 8;
+  wsR.addRow([]);
 
   // Headers columnas
   addResumenRow(wsR,"CONCEPTO","COMPRAS (606)","VENTAS (607)",{isHeader:true,height:22});
