@@ -1045,6 +1045,27 @@ function EmpresasModal({ onClose, showToast, onRefresh }) {
 function Form606({ row, onChange, onSave, saving }) {
   const ch = k => v => onChange({...row,[k]:v});
   const ncfErr = row.ncf ? validarNCF(row.ncf) : null;
+
+  // Calculadora Total → Subtotal
+  const totalFactura   = parseFloat(row._totalFactura || "") || 0;
+  const itbisFactNum   = parseFloat(row.itbisFact || "") || 0;
+  const subtotalCalc   = totalFactura > 0 ? (totalFactura - itbisFactNum).toFixed(2) : "";
+  const hayTotal       = totalFactura > 0;
+
+  const handleTotalChange = (v) => {
+    const total = parseFloat(v) || 0;
+    const itbis = parseFloat(row.itbisFact) || 0;
+    const subtotal = total > 0 ? (total - itbis).toFixed(2) : "";
+    onChange({ ...row, _totalFactura: v, montoFact: subtotal });
+  };
+
+  const handleItbisChange = (v) => {
+    const itbis = parseFloat(v) || 0;
+    const total = parseFloat(row._totalFactura) || 0;
+    const subtotal = total > 0 ? (total - itbis).toFixed(2) : row.montoFact;
+    onChange({ ...row, itbisFact: v, montoFact: total > 0 ? subtotal : row.montoFact });
+  };
+
   return (
     <div style={{background:"#080f1c",border:"1px solid #1e2d40",borderRadius:10,padding:14,marginBottom:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1053,6 +1074,55 @@ function Form606({ row, onChange, onSave, saving }) {
           {saving?"⏳ Guardando...":row._bdId?"💾 Actualizar":"💾 Guardar"}
         </button>
       </div>
+
+      {/* ── CALCULADORA TOTAL ─────────────────────────────────── */}
+      <div style={{background:"#0a1628",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 14px",marginBottom:12,display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
+        <div style={{color:"#0ea5e9",fontSize:9,letterSpacing:2,position:"absolute",marginTop:-18}}></div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+          <span style={{fontSize:16}}>🧮</span>
+          <span style={{color:"#0ea5e9",fontSize:10,fontWeight:700,letterSpacing:1}}>CALCULADORA — FACTURA SIN DESGLOSE</span>
+        </div>
+        <div style={{width:"100%",height:1,background:"#1e3a5f",marginBottom:4}} />
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",width:"100%"}}>
+          <Field label="TOTAL FACTURA (con ITBIS)">
+            <Inp
+              value={row._totalFactura || ""}
+              onChange={handleTotalChange}
+              placeholder="Ej: 11800.00"
+              style={{border:"1px solid #0ea5e9",background:"#060d1a"}}
+            />
+          </Field>
+          <div style={{display:"flex",alignItems:"center",paddingBottom:6,color:"#334155",fontSize:18}}>−</div>
+          <Field label="ITBIS FACTURADO">
+            <Inp value={row.itbisFact} onChange={handleItbisChange} placeholder="Ej: 1800.00" />
+          </Field>
+          <div style={{display:"flex",alignItems:"center",paddingBottom:6,color:"#334155",fontSize:18}}>=</div>
+          <Field label="SUBTOTAL (Monto Fact.)">
+            <div style={{
+              ...inp, display:"flex", alignItems:"center",
+              background: hayTotal ? "#051020" : "#080f1c",
+              color: hayTotal ? "#10b981" : "#334155",
+              fontWeight: hayTotal ? 700 : 400,
+              border: hayTotal ? "1px solid #10b981" : "1px solid #1e2d40",
+              minWidth:140,
+            }}>
+              {hayTotal ? subtotalCalc : "—"}
+            </div>
+          </Field>
+          {hayTotal && (
+            <button
+              onClick={()=>onChange({...row,_totalFactura:"",montoFact:"",itbisFact:""})}
+              style={{background:"#1e293b",border:"1px solid #334155",color:"#64748b",borderRadius:6,padding:"6px 10px",cursor:"pointer",fontSize:10,marginBottom:1,whiteSpace:"nowrap"}}
+              title="Limpiar calculadora"
+            >✕ Limpiar</button>
+          )}
+        </div>
+        <div style={{color:"#334155",fontSize:9,marginTop:2}}>
+          💡 Opcional · Usa esto si el suplidor no desglosa el subtotal · Los campos de abajo también son editables directamente
+        </div>
+      </div>
+
+      {/* ── CAMPOS DEL FORMULARIO ─────────────────────────────── */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:8}}>
         <Field label="RNC/CÉDULA"><Inp value={row.rnc} onChange={ch("rnc")} placeholder="101234567" /></Field>
         <Field label="TIPO ID"><Sel value={row.tipoId} onChange={ch("tipoId")} options={[{v:"1",l:"1-RNC"},{v:"2",l:"2-Cédula"},{v:"3",l:"3-Pasaporte"}]} /></Field>
@@ -1061,8 +1131,15 @@ function Form606({ row, onChange, onSave, saving }) {
         <Field label="TIPO BIENES"><Sel value={row.tipoBienes} onChange={ch("tipoBienes")} options={TIPOS_BIENES_606} /></Field>
         <Field label="FECHA NCF"><input type="date" style={inp} value={row.fechaNcf} onChange={e=>ch("fechaNcf")(e.target.value)} /></Field>
         <Field label="FECHA PAGO"><input type="date" style={inp} value={row.fechaPago} onChange={e=>ch("fechaPago")(e.target.value)} /></Field>
-        <Field label="MONTO FACT."><Inp value={row.montoFact} onChange={ch("montoFact")} placeholder="0.00" /></Field>
-        <Field label="ITBIS FACT."><Inp value={row.itbisFact} onChange={ch("itbisFact")} placeholder="0.00" /></Field>
+        <Field label="MONTO FACT.">
+          <Inp
+            value={row.montoFact}
+            onChange={v => onChange({...row, montoFact: v, _totalFactura: ""})}
+            placeholder="0.00"
+            style={hayTotal ? {border:"1px solid #10b981",color:"#10b981"} : {}}
+          />
+        </Field>
+        <Field label="ITBIS FACT."><Inp value={row.itbisFact} onChange={handleItbisChange} placeholder="0.00" /></Field>
         <Field label="ITBIS RET.TERC."><Inp value={row.itbisRetTerceros} onChange={ch("itbisRetTerceros")} placeholder="0.00" /></Field>
         <Field label="ITBIS PERCIBIDO"><Inp value={row.itbisPercibido} onChange={ch("itbisPercibido")} placeholder="0.00" /></Field>
         <Field label="TIPO RET.ISR"><Sel value={row.tipoRetIsr} onChange={ch("tipoRetIsr")} options={TIPO_RET_ISR} /></Field>
@@ -1290,7 +1367,8 @@ export default function App() {
       const isEdit = !!form._bdId;
       const url = isEdit?`${API}/api/${endpoint}/${form._bdId}`:`${API}/api/${endpoint}`;
       const method = isEdit?"PUT":"POST";
-      const body = isEdit?{...form,periodoFiscal:p}:[{...form,periodoFiscal:p,empresaId:empresaActual.id}];
+      const { _totalFactura: _tf, ...formClean } = form;
+      const body = isEdit?{...formClean,periodoFiscal:p}:[{...formClean,periodoFiscal:p,empresaId:empresaActual.id}];
       const res = await authFetch(url,{method,body:JSON.stringify(body)});
       const data = await res.json();
       if (data.ok) {
