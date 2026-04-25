@@ -49,7 +49,7 @@ const TIPO_RET_ISR = [
 ];
 
 // NCF válidos: B01-B16, E31, E32, E33, E34, E41, E43, E44, E45, E46, E47
-const NCF_REGEX = /^[BE]\d{2}\d{8}$/;
+const NCF_REGEX = /^[BE]\d{2}\d{8,10}$/;
 const validarNCF = (ncf) => {
   if (!ncf) return null;
   if (!NCF_REGEX.test(ncf)) return "NCF inválido (ej: E310000000001 o B010000000001)";
