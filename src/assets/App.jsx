@@ -48,13 +48,13 @@ const TIPO_RET_ISR = [
   { v:"11", l:"11 - Compras exterior" }, { v:"12", l:"12 - Pagos exterior" },
 ];
 
-// NCF válidos: B01-B16, E31, E32, E33, E34, E41, E43, E44, E45, E46, E47
-const NCF_REGEX = /^[BE]\d{2}\d{8}$/;
+// NCF válidos: B01-B17, E31, E32, E33, E34, E41, E43, E44, E45, E46, E47
+const NCF_REGEX = /^[BE]\d{17}\d{10}$/;
 const validarNCF = (ncf) => {
   if (!ncf) return null;
-  if (!NCF_REGEX.test(ncf)) return "NCF inválido (ej: E310000000001 o B010000000001)";
+  if (!NCF_REGEX.test(ncf)) return "NCF inválido (ej: E310000000001 o B0100000001)";
   return null;
-};
+}
 
 const emptyRow606 = () => ({
   id: crypto.randomUUID(), rnc:"", tipoId:"1", ncf:"", ncfMod:"", tipoBienes:"01",
@@ -1493,7 +1493,7 @@ export default function App() {
 
           <div style={{maxWidth:1100,margin:"0 auto",padding:"16px 20px"}}>
             <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-              <button onClick={()=>setSubTab("nuevo")} style={{padding:"7px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700,background:subTab==="nuevo"?"#1e3a5f":"#080f1c",color:subTab==="nuevo"?"#e2e8f0":"#475569"}}>➕ Nueva factura</button>
+              <button onClick={()=>{ setSubTab("nuevo"); if(tab==="606") setForm606(emptyRow606()); else setForm607(emptyRow607()); }} style={{padding:"7px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700,background:subTab==="nuevo"?"#1e3a5f":"#080f1c",color:subTab==="nuevo"?"#e2e8f0":"#475569"}}>➕ Nueva factura</button>
               <button onClick={()=>{setSubTab("registros");cargarRegistros(1,"");setRegBuscar("");}} style={{padding:"7px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700,background:subTab==="registros"?"#1e3a5f":"#080f1c",color:subTab==="registros"?"#e2e8f0":"#475569"}}>📋 Ver registros</button>
               <button onClick={()=>setShowImportar(true)} style={{padding:"7px 18px",borderRadius:8,border:"1px solid #1e3a5f",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700,background:"#080f1c",color:"#475569"}}>📤 Importar CSV</button>
               <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
